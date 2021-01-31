@@ -30,6 +30,7 @@ import mdp, util
 
 from learningAgents import ValueEstimationAgent
 import collections
+import queue
 
 class ValueIterationAgent(ValueEstimationAgent):
     """
@@ -197,4 +198,50 @@ class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
 
     def runValueIteration(self):
         "*** YOUR CODE HERE ***"
+        #Compute predecessors of all states.
+        predecessors  = util.Counter()
+        for state in self.mdp.getStates():
+            for action in self.mdp.getPossibleActions(state):
+                for nextState, prob in self.mdp.getTransitionStatesAndProbs(state, action):
+                    #Make sure to store predecessors in a set, not a list, to avoid duplicates.
+                    if nextState in predecessors:
+                        predecessors[nextState].add(state)
+                    else:
+                        predecessors[nextState] = {state}
 
+        #The priority queue is a min heap
+        p_queue = queue.PriorityQueue()
+
+        values = util.Counter()
+        for state in self.mdp.getStates():
+            if not self.mdp.isTerminal(state):
+                maxQValue = self.getMaxQValue(state)
+                # Save value
+                values[state] = maxQValue
+                # diff will be the priority
+                diff = abs(self.values[state]-maxQValue)
+                p_queue.put((-diff, state))
+        
+        for _ in range(self.iterations):
+            if p_queue.empty(): return
+            state = p_queue.get()[1]
+            # update self.values
+            self.values[state] = values[state]
+
+            for nextState in predecessors[state]:
+                maxQValue = self.getMaxQValue(nextState)
+                # Save value
+                values[nextState] = maxQValue
+                # diff will be the priority
+                diff = abs(self.values[nextState]-maxQValue)
+                if diff > self.theta:
+                    p_queue.put((-diff, nextState))
+
+    def getMaxQValue(self,state):
+        QValueForAction = util.Counter() # Keys are actions, values are q-values
+        # Compute all q-values
+        for action in self.mdp.getPossibleActions(state):
+            QValueForAction[action] = self.computeQValueFromValues(state, action)
+        # return max q-values
+        return QValueForAction[QValueForAction.argMax()]
+                
